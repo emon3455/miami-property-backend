@@ -1,33 +1,46 @@
-const express = require('express');
-const cors = require('cors');
+const express = require("express");
+const cors = require("cors");
+const connectDB = require("./db");
+const Address = require("./models/Address");
 const app = express();
 const port = 3000;
-const data = require('./data');
 
-// Middleware to parse JSON bodies
+connectDB();
+
 app.use(express.json());
-app.use(cors()); // Ensure this is applied before your routes
+app.use(cors());
 
-// Endpoint to find addresses
-app.post('/findAddress', (req, res) => {
+app.post("/findAddress", async (req, res) => {
   const addressesToMatch = req.body.address;
-  console.log('Addresses:', addressesToMatch);
+  console.log("Addresses:", addressesToMatch);
 
-  const results = addressesToMatch.map((address, index) => {
-    const matchedItem = data.find(item => item.physicalAddress.toUpperCase() === address.toUpperCase());
-    return {
-      index: index + 1,
-      matchedItem: matchedItem,
-    };
-  }).filter(result => result.matchedItem !== undefined);
+  try {
+    const results = await Promise.all(addressesToMatch.map(async (address, index) => {
+      const matchedItem = await Address.findOne({
+        physicalAddress: { $regex: new RegExp(`^${address}$`, 'i') }
+      }).exec();
+      
+      return {
+        index: index + 1,
+        matchedItem: matchedItem
+      };
+    }));
 
-  res.send(results);
+    const filteredResults = results.filter(result => result.matchedItem !== null);
+
+    res.send(filteredResults);
+  } catch (err) {
+    console.error("Error finding addresses:", err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
-app.get('/', (req, res) => {
+app.get("/", (req, res) => {
   res.send("Server is running");
 });
 
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });
+
+module.exports = app;
